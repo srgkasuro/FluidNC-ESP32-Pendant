@@ -81,8 +81,13 @@ bool OTA =false;
 bool recalibrateTouch = false;
 
 String cmd = "";
-char Temp_String[100] = "";
-const char nl[] = "\n";
+char *ptocmd = &cmd[0];
+String Dateienliste = "";
+char *ptoDateienliste = &Dateienliste[0];
+char wiederholungen;
+const String jog = "$J=G91 F";
+const String runfile= "$LocalFS/Run=";
+const String nl = "\n";
 const char jog_cancel = char(0x85);
 
 volatile uint32_t achse_aktiv_timer;
@@ -101,7 +106,8 @@ float MPos_A = 0;
 float MPos_B = 0;
 float MPos_C = 0;
 
-char Dateien[20][numChars];
+//char Dateien[20][numChars];
+String Dateien[20];
 int DateienCounter = 0;
 int NumberofDateien = 0;
 
@@ -354,7 +360,7 @@ void sendeEncoderJog(int value) {
 
 
 
-    String cmd = "$J=G91 F";
+    cmd = jog;
     cmd += float(abs(value))*0.01/Interuptintervall*1000*60;  //(ms) F in mm/min = Strecke/Interuptintervall(ms) *1000*60
     cmd +=" ";
     cmd += aktive_achse;
@@ -374,7 +380,7 @@ void sendeEncoderJog(int value) {
 }  // doSendGCode
 void sendeJoystickJog(int xvalue, int yvalue, int zvalue) {
   if (xvalue + yvalue + zvalue != 0) {
-    String cmd = "$J=G91 F";
+    cmd = jog;
     cmd += JogVorschub(max(max(abs(xvalue), abs(yvalue)), abs(zvalue)));
     switch (aktive_achse) {
       case 'X':
@@ -583,7 +589,7 @@ void settoZeroAll(lv_event_t * e)
 -----------------------------------------------------------------------------------*/
 
 void selectFile(lv_event_t *e) {
-  lv_label_set_text(ui_LabelFile, Dateien[lv_roller_get_selected(ui_Roller)]);
+  lv_label_set_text(ui_LabelFile, &Dateien[lv_roller_get_selected(ui_Roller)][0]);
 }
 /*-----------------------------------------------------------------------------------
 /////////////////---- Buttons: set aktive Achse ----///////////////////////////////////////////
@@ -669,13 +675,13 @@ void runselectedFile(lv_event_t *e) {
     _ui_state_modify(ui_ButtonRun, LV_STATE_CHECKED, _UI_MODIFY_STATE_ADD);
     //char Temp_String[40] = "";
     //Temp_String[100] = "";
-    const char cmd[] = "$LocalFS/Run=";
-    //const char nl[] = "\n";
-    strcpy(Temp_String, cmd);
-    strcat(Temp_String, lv_label_get_text(ui_LabelFile));
-    strcat(Temp_String, nl);
+    cmd = runfile;
+    cmd += String(lv_label_get_text(ui_LabelFile));
+    //strcat(Temp_String, lv_label_get_text(ui_LabelFile));
+    cmd += nl;
+    //strcat(Temp_String, nl);
     //Serial.print(Temp_String);
-    sendeSerial(Temp_String, true);
+    sendeSerial(cmd, true);
     jobrunning = true;
     jobdone = false;
   }
@@ -831,13 +837,15 @@ void sendeSerial(String Data2send, bool wait4ok) {
 /*-----------------------------------------------------------------------------------
 /////////////////---- receive Serial new ----///////////////////////////////////////////
 -----------------------------------------------------------------------------------*/
-char Status[6] = "";
+//char Status[6] = "";
+String Status = "";
 
 void empfangeSerial() {
   timerAlarmDisable(timer);
   char rc;
-  char Temp[100] = "";
-  char Check[20] = "";
+ // char Temp[100] = "";
+  String Temp2 = "";
+  //char Check[20] = "";
   int i = 0;
   int n = 0;
   int state = 0;
@@ -853,6 +861,7 @@ void empfangeSerial() {
             break;
           case ('<'):
             state = 2;
+            Status = "";
             i = 0;
             break;
           case ('o'):
@@ -882,99 +891,100 @@ void empfangeSerial() {
         break;
       case 2:
         if (rc == '|') {
-          Status[i] = '\0';
-          lv_label_set_text(ui_LabelSTATE, Status);
+          Status += '\0';
+          lv_label_set_text(ui_LabelSTATE, &Status[0]);
           //if (strcmp(Status,"Idle")==0){
           //  jobdone = true;
           //}
-          strcpy(Status, "");
+          Status = "";
           state = 3;
           i = 0;
         } else {
-          Status[i] = rc;
+          Status += rc;
           i += 1;
         }
         break;
       case 3:
         if (rc == ':') {
           state = 4;
+          Temp2="";
           i = 0;
         }
         break;
       case 4:
         if (rc == ',') {
-          Temp[i] = '\0';
-          MPos_X = atof(Temp);
-          lv_label_set_text(ui_LabelX, Temp);
+          MPos_X = Temp2.toFloat();
+          lv_label_set_text(ui_LabelX, &Temp2[0]);
           state = 5;
+          Temp2="";
           i = 0;
         } else {
-          Temp[i] = rc;
+          Temp2 += rc;
           i += 1;
         }
         break;
       case 5:
         if (rc == ',') {
-          Temp[i] = '\0';
-          MPos_Y = atof(Temp);
-          lv_label_set_text(ui_LabelY, Temp);
+          MPos_Y = Temp2.toFloat();
+          lv_label_set_text(ui_LabelY, &Temp2[0]);
           state = 6;
+          Temp2="";
           i = 0;
         } else {
-          Temp[i] = rc;
+          Temp2 += rc;
           i += 1;
         }
         break;
       case 6:
         if (rc == ',') {
-          Temp[i] = '\0';
-          MPos_Z = atof(Temp);
-          lv_label_set_text(ui_LabelZ, Temp);
+          MPos_Z = Temp2.toFloat();
+          lv_label_set_text(ui_LabelZ, &Temp2[0]);
           state = 7;
+          Temp2="";
           i = 0;
         } else {
-          Temp[i] = rc;
+          Temp2 += rc;
           i += 1;
         }
         break;
       case 7:
         if (rc == ',') {
-          Temp[i] = '\0';
-          MPos_A = atof(Temp);
-          lv_label_set_text(ui_LabelA, Temp);
+          MPos_A = Temp2.toFloat();
+          lv_label_set_text(ui_LabelA, &Temp2[0]);
           state = 8;
+          Temp2="";
           i = 0;
         } else {
-          Temp[i] = rc;
+          Temp2 += rc;
           i += 1;
         }
         break;
       case 8:
         if (rc == ',') {
-          Temp[i] = '\0';
-          MPos_B = atof(Temp);
-          lv_label_set_text(ui_LabelB, Temp);
+          MPos_B = Temp2.toFloat();
+          lv_label_set_text(ui_LabelB, &Temp2[0]);
           state = 9;
+          Temp2="";
           i = 0;
         } else {
-          Temp[i] = rc;
+          Temp2 += rc;
           i += 1;
         }
         break;
       case 9:
         if (rc == '|') {
-          Temp[i] = '\0';
-          MPos_C = atof(Temp);
-          lv_label_set_text(ui_LabelC, Temp);
+          MPos_C = Temp2.toFloat();
+          lv_label_set_text(ui_LabelC, &Temp2[0]);
           state = 10;
+          Temp2="";
           i = 0;
         } else if (rc == '>') {
-          Temp[i] = '\0';
-          MPos_C = atof(Temp);
-          lv_label_set_text(ui_LabelC, Temp);
+          MPos_C = Temp2.toFloat();
+          lv_label_set_text(ui_LabelC, &Temp2[0]);
+          Temp2="";
           state = 0;
         } else {
-          Temp[i] = rc;
+          Temp2 += rc;
           i += 1;
         }
         break;
@@ -989,6 +999,7 @@ void empfangeSerial() {
           case 'F':  // F:500 oder: FS:500,8000
             i = 0;
             state = 13;
+            Temp2="";
             break;
           case 'P':  // Pn:XYZPDHRS
             state = 14;
@@ -1028,24 +1039,21 @@ void empfangeSerial() {
         break;
       case 13:
         if (rc == '|') {
-          Temp[i] = '\0';
-          lv_label_set_text(ui_LabelFeed, Temp);
+          lv_label_set_text(ui_LabelFeed, &Temp2[0]);
           i = 0;
           state = 10;
         } else if (rc == ':') {
         } else if (rc == 'S') {
         } else if (rc == ',') {
-          Temp[i] = '\0';
-          lv_label_set_text(ui_LabelFeed, Temp);
+          lv_label_set_text(ui_LabelFeed, &Temp2[0]);
           i = 0;
           state = 11;
         } else if (rc == '>') {
-          Temp[i] = '\0';
-          lv_label_set_text(ui_LabelFeed, Temp);
+          lv_label_set_text(ui_LabelFeed, &Temp2[0]);
           i = 0;
           state = 0;
         } else {
-          Temp[i] = rc;
+          Temp2 += rc;
           i += 1;
         }
         break;
@@ -1094,13 +1102,12 @@ void empfangeSerial() {
         break;
       case 19:
         if (rc == ',') {
-          Temp[i] = '\0';
-          Fortschritt = atoi(Temp);
-          lv_bar_set_value(ui_BarFortschritt, atoi(Temp), LV_ANIM_OFF);
+          Fortschritt = Temp2.toInt();
+          lv_bar_set_value(ui_BarFortschritt, Fortschritt, LV_ANIM_OFF);
           i = 0;
           state = 20;
         } else {
-          Temp[i] = rc;
+          Temp2 += rc;
           i += 1;
         }
         break;
@@ -1168,20 +1175,24 @@ void empfangeSerial() {
         break;
       case 30:  //FILE: Beschriftung_ALEX_TEST.nc|SIZE:10236]
         if (rc == ' ') {
+          Temp2 = "";
           state = 31;
           i = 0;
         }
         break;
       case 31:
         if (rc == '|') {
-          Temp[i] = '\0';
+          Temp2 += '\0';
           //Dateien[n]=Temp;
-          strcpy(Dateien[DateienCounter], Temp);
+          Dateien[DateienCounter] =  Temp2;
+          //Serial.print("Dateix= ");
+          //Serial.println(Temp2);
+          Temp2 = "";
           DateienCounter += 1;
           i = 0;
           state = 0;
         } else {
-          Temp[i] = rc;
+          Temp2 += rc;
           i += 1;
         }
         break;
@@ -1393,12 +1404,17 @@ void loop() {
   }
 
   if (setRoller) {
-    strcpy(Temp_String,"");
+    Dateienliste = "";
     for (int i = 0; i < NumberofDateien; i++) {
-      strcat(Temp_String, Dateien[i]);
-      strcat(Temp_String, nl);
+      Dateienliste += i;
+      Dateienliste += " ";
+      for(int j = 0;j<(Dateien[i].length()-1);j++){
+        Dateienliste += Dateien[i][j];  
+      }
+      Dateienliste += nl;
     }
-    lv_roller_set_options(ui_Roller, Temp_String, LV_ROLLER_MODE_NORMAL);
+//    Serial.println(Dateienliste);
+    lv_roller_set_options(ui_Roller, Dateienliste.c_str(), LV_ROLLER_MODE_NORMAL);
     setRoller = false;
   }
 
@@ -1486,8 +1502,8 @@ void loop() {
     if (jobdone) {
       jobrunning = false;
       if(beendeJob){
-        itoa(Wiederholungen2do,Temp_String,10);
-        lv_label_set_text(ui_LabelWiederholungen,Temp_String);
+        itoa(Wiederholungen2do,&wiederholungen,10);
+        lv_label_set_text(ui_LabelWiederholungen,&wiederholungen);
         firstrun=true;
         timerAlarmEnable(timer);
         Joystickenabled=true;
@@ -1496,20 +1512,20 @@ void loop() {
       } else {
         Wiederholungendone+=1;
         if(repeat){
-          itoa(Wiederholungendone,Temp_String,10);
-          lv_label_set_text(ui_LabelWiederholungen,Temp_String);          
+          itoa(Wiederholungendone,&wiederholungen,10);
+          lv_label_set_text(ui_LabelWiederholungen,&wiederholungen);          
           runselectedFile();
         }else{
-          itoa((Wiederholungen2do-Wiederholungendone),Temp_String,10);
-          lv_label_set_text(ui_LabelWiederholungen,Temp_String);
+          itoa((Wiederholungen2do-Wiederholungendone),&wiederholungen,10);
+          lv_label_set_text(ui_LabelWiederholungen,&wiederholungen);
           if((Wiederholungen2do-Wiederholungendone)>0){
             runselectedFile();
           } else {
             timerAlarmEnable(timer);
             Joystickenabled=true;
             firstrun=true;
-            itoa((Wiederholungen2do),Temp_String,10);
-            lv_label_set_text(ui_LabelWiederholungen,Temp_String);
+            itoa((Wiederholungen2do),&wiederholungen,10);
+            lv_label_set_text(ui_LabelWiederholungen,&wiederholungen);
             _ui_state_modify(ui_ButtonRun, LV_STATE_CHECKED, _UI_MODIFY_STATE_REMOVE);
          }
         } 
